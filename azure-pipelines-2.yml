@@ -1,21 +1,85 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
+# Tomcat Java Web App CI/CD Pipeline
 trigger:
-- main
+- main   # Replace with your branch if different
 
 pool:
   name: Default
   demands:
     - agent.name -equals vivek
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  azureSubscription: 'Azuredevops'   # Replace with your authorized service connection name
+  webAppName: 'storageapp'           # Your Azure Web App name
+  environmentName: 'storageapp'      # Environment in Azure DevOps
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+stages:
+# Stage 1: Build
+- stage: Build
+  displayName: 'Build Java Web App'
+  jobs:
+  - job: MavenBuild
+    displayName: 'Maven Package and Publish Artifacts'
+    pool:
+      name: Default
+      demands:
+        - agent.name -equals vivek
+    steps:
+    - task: Maven@4
+      displayName: 'Maven Package'
+      inputs:
+        mavenPomFile: 'pom.xml'
+        mavenOptions: '-Xmx3072m'
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.17'
+        jdkArchitectureOption: 'x64'
+        goals: 'clean package'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+
+    - task: CopyFiles@2
+      displayName: 'Copy Artifacts to Staging Directory'
+      inputs:
+        SourceFolder: '$(System.DefaultWorkingDirectory)'
+        Contents: '**/target/*.war'   # Tomcat apps usually build WAR files
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+    - publish: '$(Build.ArtifactStagingDirectory)'
+      artifact: drop
+
+# Stage 2: Deploy
+- stage: Deploy
+  displayName: 'Deploy Stage'
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  # Manual approval job
+  - job: WaitForApproval
+    displayName: 'Manual Approval Before Deployment'
+    pool: server
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        instructions: 'Please approve before deploying to Azure Tomcat Web App.'
+        onTimeout: 'reject'
+        timeout: '43200' # 12 hours
+
+  # Deployment job
+  - deployment: DeployTomcatWebApp
+    displayName: 'Deploy WAR to Azure Tomcat Web App'
+    dependsOn: WaitForApproval
+    environment: $(environmentName)
+    pool:
+      name: Default
+      demands:
+        - agent.name -equals vivek
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure Linux Web App (Tomcat)'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: webAppLinux
+              appName: '$(webAppName)'
+              package: '$(Pipeline.Workspace)/drop/**/*.war'
