@@ -5,7 +5,6 @@ variables:
   azureSubscription: '09496e18-04f9-4b5a-b945-65470e02330d'
   webAppName: 'storageapp'
   environmentName: 'storageapp'
-  vmImageName: 'ubuntu-latest'
 
 stages:
 - stage: Build
@@ -14,7 +13,9 @@ stages:
   - job: MavenPackageAndPublishArtifacts
     displayName: Maven Package and Publish Artifacts
     pool:
-      vmImage: $(vmImageName)
+      name: Default
+      demands:
+        - agent.name -equals vivek
 
     steps:
     - task: Maven@4
@@ -59,7 +60,9 @@ stages:
     dependsOn: WaitForApproval
     environment: $(environmentName)
     pool:
-      vmImage: $(vmImageName)
+      name: Default
+      demands:
+        - agent.name -equals vivek
     strategy:
       runOnce:
         deploy:
