@@ -1,0 +1,56 @@
+# Java Web App pipeline to build and deploy to Azure
+trigger:
+- main
+
+pool:
+  name: Default
+  demands:
+    - agent.name -equals vivek
+
+variables:
+  azureSubscription: 'AzureVivekSC'   # Use the NAME of your service connection
+  webAppName: 'storageapp'
+  environmentName: 'storageapp'
+
+steps:
+# Step 1: Build Java project using Maven
+- task: Maven@4
+  displayName: 'Maven Package'
+  inputs:
+    mavenPomFile: 'pom.xml'
+    mavenOptions: '-Xmx3072m'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '1.17'
+    jdkArchitectureOption: 'x64'
+    goals: 'clean package'
+    publishJUnitResults: true
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'
+
+# Step 2: Copy build artifacts
+- task: CopyFiles@2
+  displayName: 'Copy Files to Artifact Staging Directory'
+  inputs:
+    SourceFolder: '$(System.DefaultWorkingDirectory)'
+    Contents: '**/target/*.?(war|jar)'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+# Step 3: Publish artifacts
+- publish: '$(Build.ArtifactStagingDirectory)'
+  artifact: drop
+
+# Step 4: Manual approval before deployment
+- task: ManualValidation@0
+  displayName: 'Manual Approval Before Deployment'
+  inputs:
+    instructions: 'Please approve before deploying to Azure.'
+    onTimeout: 'reject'
+    timeout: '43200'  # 12 hours
+
+# Step 5: Deploy to Azure Web App (Linux)
+- task: AzureWebApp@1
+  displayName: 'Deploy Java Web App to Azure'
+  inputs:
+    azureSubscription: '$(azureSubscription)'
+    appType: webAppLinux
+    appName: '$(webAppName)'
+    package: '$(Build.ArtifactStagingDirectory)/**/*.?(war|jar)'
