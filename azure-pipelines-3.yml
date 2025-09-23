@@ -2,7 +2,6 @@ trigger:
 - main
 
 variables:
-
   # Azure Resource Manager connection created during pipeline creation
   azureSubscription: '64c63129-362c-4c19-8e2e-2f9ce52f6d73'
 
@@ -24,14 +23,20 @@ stages:
         - agent.name -equals vivek
 
     steps:
+    - script: |
+        echo "Installing dependencies..."
+        sudo apt-get update
+        sudo apt-get install -y openjdk-17-jdk maven
+        mvn -v
+      displayName: 'Install Java 17 and Maven'
+
     - task: Maven@4
       displayName: 'Maven Package'
       inputs:
         mavenPomFile: 'pom.xml'
         mavenOptions: '-Xmx3072m'
-        javaHomeOption: 'JDKVersion'
-        jdkVersionOption: '1.17'
-        jdkArchitectureOption: 'x64'
+        javaHomeOption: 'Path'
+        jdkDirectory: '/usr/lib/jvm/java-17-openjdk-amd64'
         publishJUnitResults: true
         testResultsFiles: '**/surefire-reports/TEST-*.xml'
         goals: 'clean package'
